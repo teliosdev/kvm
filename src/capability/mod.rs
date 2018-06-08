@@ -38,6 +38,7 @@ impl<T: AsRawFd> Capability for T {
 pub enum CapabilityKind {
     IoEventFd,
     IrqChip,
+    Pit2,
     IrqFd,
     SetTssAddr,
     SetIdentityMapAddr,
@@ -49,6 +50,7 @@ impl Into<i32> for CapabilityKind {
         match self {
             CapabilityKind::IoEventFd => sys::KVM_CAP_IOEVENTFD,
             CapabilityKind::IrqChip => sys::KVM_CAP_IRQCHIP,
+            CapabilityKind::Pit2 => sys::KVM_CAP_PIT2,
             CapabilityKind::IrqFd => sys::KVM_CAP_IRQFD,
             CapabilityKind::SetTssAddr => sys::KVM_CAP_SET_TSS_ADDR,
             CapabilityKind::SetIdentityMapAddr => sys::KVM_CAP_SET_IDENTITY_MAP_ADDR,

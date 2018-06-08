@@ -7,6 +7,15 @@ pub enum Direction {
     Out = sys::KVM_EXIT_IO_OUT,
 }
 
+impl Direction {
+    pub fn reverse(&self) -> Direction {
+        match self {
+            Direction::In => Direction::Out,
+            Direction::Out => Direction::In,
+        }
+    }
+}
+
 impl From<u8> for Direction {
     fn from(v: u8) -> Direction {
         match v {
@@ -50,8 +59,8 @@ pub enum Pause {
     Invalid(u32),
 }
 
-impl<'a> From<&'a sys::Run> for Pause {
-    fn from(run: &'a sys::Run) -> Pause {
+impl From<sys::Run> for Pause {
+    fn from(run: sys::Run) -> Pause {
         match run.exit_reason {
             sys::KVM_EXIT_UNKNOWN => Pause::Unknown(unsafe { run.exit.hw.hardware_exit_reason }),
             sys::KVM_EXIT_FAIL_ENTRY => {

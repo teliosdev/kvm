@@ -32,6 +32,25 @@ pub struct TranslatedAddress {
     pub usermode: bool,
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub struct IoAction(pub IoAddress, pub IoDirection, pub usize);
+
+impl IoAction {
+    pub fn new(address: IoAddress, direction: IoDirection, size: usize) -> IoAction {
+        IoAction(address, direction, size)
+    }
+
+    pub fn address(&self) -> IoAddress {
+        self.0
+    }
+    pub fn direction(&self) -> IoDirection {
+        self.1
+    }
+    pub fn size(&self) -> usize {
+        self.2
+    }
+}
+
 fn merge_into(run: sys::Run, pause: Pause) -> sys::Run {
     let (code, exit): (u32, sys::Exit) = pause.into();
     sys::Run {
@@ -99,7 +118,11 @@ impl Core {
     }
 
     pub fn pause(&self) -> Pause {
-        <memory::Slab as AsRef<sys::Run>>::as_ref(&self.value).into()
+        (*<memory::Slab as AsRef<sys::Run>>::as_ref(&self.value)).into()
+    }
+
+    pub fn clear(&mut self) {
+        self.set_pause(Pause::Invalid(0))
     }
 
     pub fn set_registers(&mut self, registers: Registers) -> Result<()> {

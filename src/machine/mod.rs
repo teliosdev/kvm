@@ -9,7 +9,6 @@ use std::sync::{Arc, Mutex};
 pub struct Machine {
     fd: RawFd,
     msize: usize,
-    pub slabs: Vec<Arc<Mutex<memory::Slab>>>,
     pub maps: Vec<(u64, Arc<Mutex<memory::Slab>>, u64)>,
 }
 
@@ -18,7 +17,6 @@ impl Machine {
         Ok(Machine {
             fd,
             msize,
-            slabs: vec![],
             maps: vec![],
         })
     }
@@ -27,6 +25,17 @@ impl Machine {
         self.ensure_capability(CapabilityKind::IrqChip)?;
         unsafe { sys::kvm_create_irqchip(self.fd) }
             .chain_err(|| ErrorKind::KvmMachineOperationError("kvm_create_irqchip"))
+            .map(|_| ())
+    }
+
+    pub fn create_pit(&mut self) -> Result<()> {
+        self.ensure_capability(CapabilityKind::Pit2)?;
+        let pit2 = sys::PitConfig {
+            flags: sys::KVM_PIT_SPEAKER_DUMMY,
+            _pad: [0; 15],
+        };
+        unsafe { sys::kvm_create_pit2(self.fd, &pit2 as *const sys::PitConfig) }
+            .chain_err(|| ErrorKind::KvmMachineOperationError("kvm_create_pit2"))
             .map(|_| ())
     }
 
@@ -81,19 +90,34 @@ impl Machine {
             .map(|_| ())
     }
 
-    pub fn set_tss_addr(&mut self, addr: Option<i32>) -> Result<()> {
+    pub fn set_tss_addr(&mut self, addr: Option<u32>) -> Result<()> {
         self.ensure_capability(CapabilityKind::SetTssAddr)?;
-        let addr = addr.unwrap_or(0xfffbd000u32 as i32);
+        let addr = addr.unwrap_or(0xfffbd000u32);
 
         unsafe { sys::kvm_set_tss_addr(self.fd, addr) }
             .chain_err(|| ErrorKind::KvmMachineOperationError("kvm_set_tss_addr"))
             .map(|_| ())
     }
 
-    pub fn create_memory_slab(&mut self, size: usize) -> Result<Arc<Mutex<memory::Slab>>> {
+    pub fn create_memory_region(
+        &mut self,
+        at: u64,
+        size: usize,
+    ) -> Result<Arc<Mutex<memory::Slab>>> {
         let slab = memory::Slab::from_anon(size)?;
         let arc = Arc::new(Mutex::new(slab));
-        self.slabs.push(arc.clone());
+        self.mount_memory_region(at, arc.clone())?;
+        Ok(arc)
+    }
+
+    pub fn create_read_only_memory_region(
+        &mut self,
+        at: u64,
+        size: usize,
+    ) -> Result<Arc<Mutex<memory::Slab>>> {
+        let slab = memory::Slab::from_anon(size)?;
+        let arc = Arc::new(Mutex::new(slab));
+        self.mount_read_only_memory_region(at, arc.clone())?;
         Ok(arc)
     }
 
@@ -105,6 +129,30 @@ impl Machine {
         let mr = sys::UserspaceMemoryRegion {
             slot: (self.maps.len() + 1) as u32,
             flags: 0,
+            guest_phys_addr: at,
+            memory_size: len,
+            userspace_addr: address,
+        };
+
+        unsafe {
+            sys::kvm_set_user_memory_region(self.fd, &mr as *const sys::UserspaceMemoryRegion)
+        }.chain_err(|| ErrorKind::KvmMachineOperationError("kvm_set_user_memory_region"))
+            .map(move |_| self.maps.push((at, slab, len)))
+    }
+
+    pub fn mount_read_only_memory_region(
+        &mut self,
+        at: u64,
+        slab: Arc<Mutex<memory::Slab>>,
+    ) -> Result<()> {
+        let (address, len) = {
+            let mslab = slab.lock().unwrap();
+            (mslab.address(), mslab.len() as u64)
+        };
+
+        let mr = sys::UserspaceMemoryRegion {
+            slot: (self.maps.len() + 1) as u32,
+            flags: sys::KVM_MEM_READONLY,
             guest_phys_addr: at,
             memory_size: len,
             userspace_addr: address,

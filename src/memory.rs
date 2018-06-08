@@ -12,7 +12,7 @@ pub struct Slab(usize, *mut u8);
 impl Slab {
     pub fn from_file(fd: RawFd, offset: isize, size: usize) -> Result<Slab> {
         let prot = mman::ProtFlags::PROT_READ | mman::ProtFlags::PROT_WRITE;
-        let map = mman::MapFlags::MAP_FILE | mman::MapFlags::MAP_PRIVATE;
+        let map = mman::MapFlags::MAP_FILE | mman::MapFlags::MAP_SHARED;
         unsafe { mman::mmap(0 as *mut c_void, size, prot, map, fd, offset as i64) }
             .chain_err(|| ErrorKind::MemoryMapError)
             .map(|pointer| Slab(size, pointer as *mut u8))
@@ -20,7 +20,7 @@ impl Slab {
 
     pub fn from_anon(size: usize) -> Result<Slab> {
         let prot = mman::ProtFlags::PROT_READ | mman::ProtFlags::PROT_WRITE;
-        let map = mman::MapFlags::MAP_ANON | mman::MapFlags::MAP_PRIVATE;
+        let map = mman::MapFlags::MAP_ANON | mman::MapFlags::MAP_SHARED;
 
         unsafe { mman::mmap(0 as *mut c_void, size, prot, map, 0, 0) }
             .chain_err(|| ErrorKind::MemoryMapError)
@@ -33,6 +33,20 @@ impl Slab {
 
     pub fn len(&self) -> usize {
         self.0
+    }
+
+    pub fn read_bytes(&mut self, at: usize, dest: &mut [u8]) {
+        unsafe {
+            let src = (self.address() as usize + at) as *const u8;
+            ::std::ptr::copy_nonoverlapping(src, dest.as_mut_ptr(), dest.len())
+        }
+    }
+
+    pub fn write_bytes(&mut self, at: usize, value: &[u8]) {
+        unsafe {
+            let dest = (self.address() as usize + at) as *mut u8;
+            ::std::ptr::copy_nonoverlapping(value.as_ptr(), dest, value.len())
+        }
     }
 }
 
