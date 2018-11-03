@@ -1,53 +1,36 @@
-use super::capability::CapabilityKind;
-
-error_chain! {
-    foreign_links {
-        Io(::std::io::Error);
-    }
-
+error_chain!{
     errors {
-        KvmSystemOpenError {
-            description("could not open /dev/kvm")
-            display("could not open /dev/kvm")
+        UnavailableSystemError {
+            description("unable to open kvm device")
+            display("unable to open kvm device")
         }
 
-        KvmSystemOperationError(operation: &'static str) {
-            description("could not perform an operation")
-            display("could not perform the operation `{}'", operation)
+        CreateIoEventFdError {
+
         }
 
-        KvmMachineOperationError(operation: &'static str) {
-            description("could not perform an operation")
-            display("could not perform the operation `{}'", operation)
+        ReadIoEventFdError {
+
         }
 
-        KvmCoreOperationError(operation: &'static str) {
-            description("could not perform an operation")
-            display("could not perform the operation `{}'", operation)
+        SystemApiError(req: &'static str) {
+            description("an error occurred while trying to handle an api request")
+            display("an error occurred while trying to handle api request `{}'", req)
         }
 
-        KvmCapabilityError(operation: &'static str) {
-            description("could not check a capability")
-            display("could not perform the operatoin `{}'", operation)
+        MachineApiError(req: &'static str) {
+            description("an error occurred while trying to handle an api request")
+            display("an error occurred while trying to handle api request `{}'", req)
         }
 
-        KvmCapabilityFailError(cap: CapabilityKind) {
-            description("could not detect a given capability")
-            display("could not find the capability {:?}", cap)
+        MissingExtensionError(cap: ::machine::Capability) {
+            description("a requested extension was missing from the system")
+            display("the extension {:?} was missing from the system", cap)
         }
 
-        UnsupportedOsError {
-            description("attempted to run on an unsupported OS")
-            display("attempted to run on an unsupported OS")
+        InvalidVersionError(got: i32, expected: i32) {
+            description("invalid KVM API version received")
+            display("invalid KVM API version received; expected {}, got {}", expected, got)
         }
-
-        MemoryMapError {
-            description("managing a memory map failed")
-            display("managing a memory map failed")
-        }
-
-        MemoryAllocationError
-
-        TokioError
     }
 }

@@ -10,3 +10,4 @@ kvm-sys = { path = "../kvm-sys", version = "0.1.0" }
 byteorder = "1"
 mio = "0.6"
 tokio = "0.1"
+bitflags = "1"
