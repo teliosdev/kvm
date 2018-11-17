@@ -1,13 +1,14 @@
 use super::error::*;
 use kvm_sys as kvm;
 use std::fs::File;
-use std::ops::{Deref, DerefMut};
 use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 
 mod data;
+mod exit;
 mod state;
 
 pub use self::data::{Data, DataMut};
+pub use self::exit::{Exit, ExitMut};
 pub use self::state::State;
 
 #[derive(Debug)]
@@ -44,10 +45,15 @@ impl Core {
         Ok(())
     }
 
+    /// Retrieves a read-only version of the data for the CPU.  Since
+    /// CPUs cannot be sent across threads, this is safe.
     pub fn data<'c>(&'c self) -> Data<'c> {
         Data(unsafe { &*self.1 })
     }
 
+    /// Retrieves a read-write version of the data for the CPU.  Since
+    /// this requires a mutable reference to the CPU, and the CPU cannot
+    /// be shared across threads, this is safe.
     pub fn data_mut<'c>(&'c mut self) -> DataMut<'c> {
         DataMut(unsafe { &mut *self.1 })
     }

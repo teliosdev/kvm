@@ -11,7 +11,6 @@ use std::ops::Drop;
 use std::os::unix::io::{AsRawFd, FromRawFd, RawFd};
 use tokio::io::Error as TokioIoError;
 use tokio::prelude::*;
-use tokio::reactor::PollEvented2;
 
 bitflags! {
     pub struct IrqFdFlag: u32 {
