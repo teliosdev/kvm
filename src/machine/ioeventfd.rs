@@ -14,13 +14,26 @@ use tokio::reactor::PollEvented2;
 
 bitflags! {
     pub struct IoEventFdFlag: u32 {
+        /// Denotes that this eventfd is for a port-IO instead of memory
+        /// IO.
         const PIO = kvm::KVM_IOEVENTFD_FLAG_PIO;
+        /// Denotes that the EventFd should be removed, instead of
+        /// added.
         const DEASSIGN = kvm::KVM_IOEVENTFD_FLAG_DEASSIGN;
+        /// Denotes that the EventFd should only trigger if the data
+        /// matches.
         const DATAMATCH = kvm::KVM_IOEVENTFD_FLAG_DATAMATCH;
+        /// Honestly, no clue.
         const VIRTIO_CCW_NOTIFY = kvm::KVM_IOEVENTFD_FLAG_VIRTIO_CCW_NOTIFY;
     }
 }
 
+/// An IoEventFd.  This is a structure that allows userspace to poll for
+/// reads/writes to data locations, instead of having to have the VM
+/// exit, handle the request, and go back into the VM.  That way, when
+/// data is requested, the guest VM can schedule another task onto the
+/// CPU while we handle the request.  Note that this is only for
+/// notifying us - we still have to notify the CPU in return.
 pub struct IoEventFd<'m> {
     pub(super) machine: &'m Machine,
     pub(super) file: File,
@@ -38,6 +51,8 @@ impl<'m> IoEventFd<'m> {
             .chain_err(|| ErrorKind::CreateIoEventFdError)
     }
 
+    /// Reads the next value from the EventFd.  This will block until
+    /// the value is available.
     pub fn read_value(&mut self) -> Result<u64> {
         let mut buf = [0u8; 8];
         self.read_exact(&mut buf)
@@ -45,8 +60,13 @@ impl<'m> IoEventFd<'m> {
         Ok(NativeEndian::read_u64(&buf))
     }
 
-    pub fn stream(&mut self) -> IoEventStream {
-        unimplemented!()
+    /// Creates an event stream from this eventfd.
+    pub fn stream<'s>(&'s mut self) -> IoEventStream<'s, 'm> {
+        IoEventStream {
+            ev: PollEvented2::new(self),
+            buf: [0; 8],
+            len: 0,
+        }
     }
 }
 
@@ -144,6 +164,9 @@ impl<'m> Read for IoEventFd<'m> {
     }
 }
 
+/// An event stream for an IoEventFd.  This will read to an 8-byte
+/// boundry, and yield the 8-byte value as a u64.  Once the u64 is
+/// yielded, the event should be considered "triggered."
 pub struct IoEventStream<'m, 's: 'm> {
     ev: PollEvented2<&'m mut IoEventFd<'s>>,
     buf: [u8; 8],

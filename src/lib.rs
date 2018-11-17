@@ -1,6 +1,3 @@
-#![feature(optin_builtin_traits)]
-#![feature(allocator_api)]
-
 extern crate kvm_sys;
 #[macro_use]
 extern crate error_chain;

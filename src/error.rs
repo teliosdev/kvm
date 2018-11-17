@@ -13,6 +13,9 @@ error_chain!{
 
         }
 
+        CreateIrqFdError {}
+        NotifyIrqFdError {}
+
         SystemApiError(req: &'static str) {
             description("an error occurred while trying to handle an api request")
             display("an error occurred while trying to handle api request `{}'", req)
@@ -21,6 +24,16 @@ error_chain!{
         MachineApiError(req: &'static str) {
             description("an error occurred while trying to handle an api request")
             display("an error occurred while trying to handle api request `{}'", req)
+        }
+
+        CoreApiError(req: &'static str) {
+            description("an error occurred while trying to handle an api request")
+            display("an error occurred while trying to handle api request `{}'", req)
+        }
+
+        MapCoreError {
+            description("an error occurred while attempting to map the core into memory")
+            display("an error occurred while attempting to map the core into memory")
         }
 
         MissingExtensionError(cap: ::machine::Capability) {

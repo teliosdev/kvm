@@ -132,7 +132,7 @@ impl System {
         unsafe { kvm::kvm_get_msr_index_list(self.as_raw_fd(), pointer) }
             .chain_err(|| ErrorKind::SystemApiError("kvm_get_msr_index_list"))?;
 
-        Ok(self::msr::condense_list(pointer, count))
+        Ok(self::msr::condense_list(pointer))
     }
 
     pub fn msr_feature_index_list(&self) -> Result<Vec<MsrIndex>> {
@@ -146,7 +146,7 @@ impl System {
         let pointer = self::msr::alloc_list(count);
         unsafe { kvm::kvm_get_msr_feature_index_list(self.as_raw_fd(), pointer) }
             .chain_err(|| ErrorKind::SystemApiError("kvm_get_msr_feature_index_list"))?;
-        Ok(self::msr::condense_list(pointer, count))
+        Ok(self::msr::condense_list(pointer))
     }
 
     /// Returns the size required for the mmap of the vCPU file
@@ -203,4 +203,4 @@ impl AsRef<File> for System {
     }
 }
 
-impl !Sync for System {}
+// impl !Sync for System {}

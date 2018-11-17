@@ -6,8 +6,10 @@ use std::num::NonZeroU32;
 use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 
 mod ioeventfd;
+mod irqfd;
 mod region;
 pub use self::ioeventfd::{IoEventFd, IoEventFdFlag};
+pub use self::irqfd::{IrqFd, IrqFdFlag};
 pub use self::region::*;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -215,7 +217,7 @@ impl Machine {
             irq,
             level: level as u32,
         };
-        unsafe { kvm::kvm_irq_line_status(self.as_raw_fd(), &mut irqlevel as *mut _) }
+        unsafe { kvm::kvm_irq_line(self.as_raw_fd(), &mut irqlevel as *mut _) }
             .chain_err(|| ErrorKind::MachineApiError("kvm_irq_line_status"))
             .map(|_| irqlevel.irq)
     }
@@ -316,6 +318,14 @@ impl Machine {
             .map(|_| ())
     }
 
+    /// This creates an IoEventFd.  An IoEventFd is an eventfd that
+    /// notifies on an access to a desired IO location - it notifies us,
+    /// the userspace, by making the eventfd readable.  This can be used
+    /// along with async IO systems to build a system that responds to
+    /// IO access fast and easy.
+    ///
+    /// This notification system only goes from inside the system to
+    /// the outside.
     pub fn create_ioeventfd<'m>(
         &'m self,
         address: u64,
@@ -336,6 +346,22 @@ impl Machine {
             })
     }
 
+    /// This creates an IrqFd.  This allows userspace to send an Irq
+    /// to the CPU without forcing the CPU to halt.  This is tied to a
+    /// specific GSI line, given at creation.
+    pub fn create_irqfd<'m>(&'m self, gsi: u32, flags: IrqFdFlag) -> Result<IrqFd<'m>> {
+        let irqfd = IrqFd::build()?;
+        self.irqfd_mod(gsi, flags, irqfd.as_raw_fd())
+            .map(|_| IrqFd {
+                machine: self,
+                file: irqfd,
+                gsi,
+                flags,
+            })
+    }
+
+    /// Internal call to modify already existing IoEventFds.  This is
+    /// mostly used to delete an IoEventFd that already exists.
     pub(crate) fn ioeventfd_mod(
         &self,
         addr: u64,
@@ -355,6 +381,20 @@ impl Machine {
 
         unsafe { kvm::kvm_ioeventfd(self.as_raw_fd(), &ioeventfd as *const _) }
             .chain_err(|| ErrorKind::MachineApiError("kvm_ioeventfd"))
+            .map(|_| ())
+    }
+
+    pub(crate) fn irqfd_mod(&self, gsi: u32, flags: IrqFdFlag, fd: RawFd) -> Result<()> {
+        let irqfd = kvm::IrqFd {
+            fd,
+            gsi,
+            flags: flags.bits(),
+            resampled: 0,
+            _pad: [0u8; 16],
+        };
+
+        unsafe { kvm::kvm_irqfd(self.as_raw_fd(), &irqfd as *const _) }
+            .chain_err(|| ErrorKind::MachineApiError("kvm_irqfd"))
             .map(|_| ())
     }
 }
@@ -377,4 +417,4 @@ impl IntoRawFd for Machine {
     }
 }
 
-impl !Sync for Machine {}
+// impl !Sync for Machine {}
